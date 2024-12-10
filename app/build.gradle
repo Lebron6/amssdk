@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+
+    compileSdkVersion 31
+    buildToolsVersion "29.0.3"
+
+    defaultConfig {
+        applicationId "com.aros.myapplication"
+        minSdkVersion 23
+        targetSdkVersion 31
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+//    kotlinOptions {
+//        jvmTarget = '1.8'
+//    }
+//    composeOptions {
+//        kotlinCompilerExtensionVersion '1.4.3'
+//    }
+    packagingOptions {
+        excludes += '/META-INF/{AL2.0,LGPL2.1}'
+    }
+}
+
+dependencies {
+
+    implementation "androidx.multidex:multidex:2.0.1"
+    implementation "androidx.annotation:annotation:1.1.0"
+    implementation "androidx.appcompat:appcompat:1.3.1"
+//    api 'com.squareup.retrofit2:converter-gson:2.9.0'
+//    implementation files ("libs/arossdk-release.aar")
+//    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.0'
+//    implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
+//    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.0.0'
+    implementation project(path: ':arossdk')
+// For developers using AndroidX in their applications
+    implementation 'pub.devrel:easypermissions:3.0.0'
+
+}
