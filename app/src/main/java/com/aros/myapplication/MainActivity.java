@@ -1,6 +1,5 @@
 package com.aros.myapplication;
 
-import android.Manifest;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
@@ -9,7 +8,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.aros.arossdk.api.AMSSDKManager;
@@ -17,7 +15,6 @@ import com.aros.arossdk.api.Config;
 import com.aros.arossdk.api.FlightState;
 import com.aros.arossdk.callback.MqttListener;
 import com.aros.arossdk.callback.ServerControlListener;
-
 
 import java.util.List;
 
@@ -163,57 +160,152 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
         config.setServerUri(etAddr.getText().toString().trim());
         config.setUserName(etUserName.getText().toString().trim());
         config.setPassword(etPassword.getText().toString().trim());
-
         config.setSn(etSn.getText().toString().trim());
         AMSSDKManager.getInstance().init(this, config);
     }
 
     private void addLisener() {
+        //监听服务端下发的操作指令
         AMSSDKManager.getInstance().setControlListener(new ServerControlListener() {
+            /**
+             * 确认飞机是否和遥控器建立了连接
+             * 返回true表示飞机已连接，此时会接收航线任务
+             *
+             * @return
+             */
             @Override
             public boolean onQueryAircraftConnectStatus() {
                 return false;
             }
 
+            /**
+             *
+             * type表示
+             * missionFileUrl表示航线文件的Url，客户端需要下载航线文件，再上传到飞机执行任务
+             *
+             * @param type
+             * @param flightId
+             * @param flightName
+             * @param missionFileUrl
+             */
+            /**
+             * 接收服务器下发的航线任务
+             * @param type 消息类型
+             * @param flightId 放在定频消息里推送
+             * @param flightName 放在定频消息里推送
+             * @param uploadUrl minio媒体文件上传地址
+             * @param bucketName minio桶名
+             * @param key minio key(路径)
+             * @param sortiesId minio sortiesId
+             * @param accessKey minio Access_key
+             * @param missionUrl 航线文件下载url
+             */
             @Override
-            public void onDockActionReceive(String s) {
-
+            public void onMissionFileReceive(int type, String flightId, String flightName,
+                                             String uploadUrl, String bucketName, String key,
+                                             String sortiesId,String accessKey, String missionUrl) {
+                //航线执行成功调用
+//                AMSSDKManager.getInstance().response2Server(type);
+                //航线执行失败调用
+//                AMSSDKManager.getInstance().responseErrorMsg2Server(type, "执行失败原因");
             }
 
-            @Override
-            public void onMissionFileReceive(int type, String flightId, String flightName, String missionFileUrl) {
-
-            }
-
+            /**
+             * 航线暂停
+             *
+             * @param type
+             */
             @Override
             public void onMissionPause(int type) {
 
             }
 
+            /**
+             * 航线恢复
+             *
+             * @param type
+             */
             @Override
             public void onMissionResume(int type) {
 
             }
 
-            @Override
-            public void onStartGoHome(int type) {
-
-            }
-
-            @Override
-            public void onCancelGoHome(int type) {
-
-            }
-
+            /**
+             * 终止航线
+             *
+             * @param type
+             */
             @Override
             public void onMissionStop(int type) {
 
             }
 
+            /**
+             * 返航
+             *
+             * @param type
+             */
+            @Override
+            public void onStartGoHome(int type) {
+
+            }
+
+            /**
+             * 取消返航
+             *
+             * @param type
+             */
+            @Override
+            public void onCancelGoHome(int type) {
+
+            }
+
+            /**
+             * 紧急备降点降落
+             *
+             * @param type
+             */
             @Override
             public void onEmergencyLanding(int type) {
 
             }
+
+            @Override
+            public void onVirtualStickModeEnabled(int type, boolean enabled) {
+
+            }
+
+            @Override
+            public void onVirtualStickAdvancedParamReceive(int type, double x, double y, double r, double z) {
+
+            }
+
+            @Override
+            public void onGimbalRotateByRelativeAngle(int type, double x, double y) {
+
+            }
+
+            @Override
+            public void onSwitchCameraVideoStreamSource(int type, int sourceType) {
+
+            }
+
+            @Override
+            public void onSwitchCameraMode(int type, int cameraMode) {
+
+            }
+
+            /**
+             * 客户端通知机库开门、关门、入库、关机的回复，但并不代表机库已经执行完相应动作，
+             * 比如调用sendDockOpenCommand，服务端在收到后会立即回复，执行这个回调
+             */
+            @Override
+            public void onDockActionReceive(String s) {
+
+            }
+
+
+
         });
         AMSSDKManager.getInstance().setMqttListener(new MqttListener() {
             @Override

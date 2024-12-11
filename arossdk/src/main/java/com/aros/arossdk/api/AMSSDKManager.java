@@ -2,6 +2,7 @@ package com.aros.arossdk.api;
 
 import android.content.Context;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.aros.arossdk.callback.MqttListener;
@@ -45,7 +46,7 @@ public class AMSSDKManager {
 
     public void init(Context context, Config config) {
         if (mMqttClient != null && mMqttClient.isConnected()) {
-            Log.e(getClass().getSimpleName(), "mqtt 已连接");
+            Log.e(TAG, "mqtt 已连接");
             return;
         }
         if (mMqttOptions == null) {
@@ -119,7 +120,7 @@ public class AMSSDKManager {
             try {
                 json = new String(mqttMessage.getPayload(), "UTF-8");
             } catch (UnsupportedEncodingException e) {
-                Log.e(getClass().getSimpleName(), "解析异常:" + e.toString());
+                Log.e(TAG, "解析异常:" + e.toString());
                 throw new RuntimeException(e);
             }
             Message message = new Gson().fromJson(json, Message.class);
@@ -137,7 +138,18 @@ public class AMSSDKManager {
                     break;
                 //航线文件下发
                 case 60003:
-                    controlListener.onMissionFileReceive(message.getMsg_type(), message.getFlightId(), message.getFlight_name(), message.getKmz_url());
+                    if (!TextUtils.isEmpty(message.getUpload_url())){
+                        Log.e(TAG, "minio媒体文件上传地址为空");
+                        return;
+                    }
+                    String[] splitUrl = message.getUpload_url().split("//")[1].split("/");
+                    if (!(splitUrl.length<4)){
+                        controlListener.onMissionFileReceive(message.getMsg_type(), message.getFlightId(),message.getFlight_name(),
+                                "http://" + splitUrl[0],splitUrl[1],splitUrl[2],splitUrl[3],message.getAccess_key(),
+                                 message.getKmz_url());
+                    }else{
+                        Log.e(TAG, "minio媒体文件上传地址格式有误:"+message.getUpload_url());
+                    }
                     break;
                 //航线暂停
                 case 60004:
@@ -150,6 +162,33 @@ public class AMSSDKManager {
                 //返航
                 case 60006:
                     controlListener.onStartGoHome(message.getMsg_type());
+                    break;
+                //获取虚拟摇杆控制权
+                case 60007:
+                    controlListener.onVirtualStickModeEnabled(message.getMsg_type(),true);
+                    break;
+                //接收虚拟摇杆杆量数据
+                case 60008:
+                    controlListener.onVirtualStickAdvancedParamReceive(message.getMsg_type(),
+                            Double.valueOf(message.getX()), Double.valueOf(message.getY()),
+                            Double.valueOf(message.getR()), Double.valueOf(message.getZ()));
+                    break;
+                //云台角度控制
+                case 60009:
+                    controlListener.onGimbalRotateByRelativeAngle(message.getMsg_type(),
+                            Double.valueOf(message.getX()), Double.valueOf(message.getY()));
+                    break;
+                //取消虚拟摇杆控制权
+                case 60016:
+                    controlListener.onVirtualStickModeEnabled(message.getMsg_type(),false);
+                    break;
+                //切换视频源 1广角 2变焦 3红外
+                case 60017:
+                    controlListener.onSwitchCameraVideoStreamSource(message.getMsg_type(),message.getCameraVideoStreamSource());
+                    break;
+                //设置相机模式 0拍照 1录像
+                case 60018:
+                   controlListener.onSwitchCameraMode(message.getMsg_type(),message.getCameraMode());
                     break;
                 //取消返航
                 case 60106:
