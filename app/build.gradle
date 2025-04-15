@@ -54,6 +54,9 @@ dependencies {
 //    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.0.0'
     implementation project(path: ':arossdk')
 // For developers using AndroidX in their applications
+    implementation 'com.amazonaws:aws-android-sdk-s3:2.72.0'
+    implementation 'com.amazonaws:aws-android-sdk-mobile-client:2.72.0'
+    implementation 'io.reactivex.rxjava3:rxkotlin:3.0.0'
+    implementation 'io.reactivex.rxjava3:rxandroid:3.0.0'
     implementation 'pub.devrel:easypermissions:3.0.0'
-
-}
+ }

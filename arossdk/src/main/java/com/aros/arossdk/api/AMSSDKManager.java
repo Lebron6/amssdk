@@ -9,7 +9,6 @@ import com.aros.arossdk.callback.MqttListener;
 import com.aros.arossdk.callback.ServerControlListener;
 import com.aros.arossdk.entity.Message;
 import com.aros.arossdk.entity.MessageReply;
-import com.aros.arossdk.tools.Utils;
 import com.google.gson.Gson;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
@@ -55,16 +54,15 @@ public class AMSSDKManager {
         sn = config.getSn();
         mMqttOptions.setAutomaticReconnect(true); //ltz add
         mMqttOptions.setMaxInflight(100);// 增加最大并发未确认消息数量
-        mMqttOptions.setCleanSession(false); //设置是否清除缓存
+        mMqttOptions.setCleanSession(true); //设置是否清除缓存
         mMqttOptions.setConnectionTimeout(30); //设置超时时间，单位：秒 ltz denote
         mMqttOptions.setKeepAliveInterval(5); //设置心跳包发送间隔，单位：秒 ltz denote
         mMqttOptions.setUserName(config.getUserName()); //设置用户名
         mMqttOptions.setPassword(config.getPassword().toCharArray()); //设置密码
         mMqttClient = new MqttAndroidClient(context, config.getServerUri(),
-                Utils.generateRandomString(10));
+                System.currentTimeMillis()+"app");
 
     }
-
 
     public void connect() {
         if (mMqttClient != null && mMqttClient.isConnected()) {
@@ -79,6 +77,7 @@ public class AMSSDKManager {
             throw new RuntimeException(e);
         }
         mMqttClient.setCallback(mqttCallback); //设置监听订阅消息的回调
+
     }
 
     public void reConnect() {
@@ -142,11 +141,18 @@ public class AMSSDKManager {
                         Log.e(TAG, "minio媒体文件上传地址为空");
                         return;
                     }
-                    String[] splitUrl = message.getUpload_url().split("//")[1].split("/");
-                    if (!(splitUrl.length<4)){
-                        controlListener.onMissionFileReceive(message.getMsg_type(), message.getFlightId(),message.getFlight_name(),
-                                "http://" + splitUrl[0],splitUrl[1],splitUrl[2],splitUrl[3],message.getAccess_key(),
-                                 message.getKmz_url());
+                    String[] splitUrl = message.getUpload_url().split("://|/");
+                    if (splitUrl.length>=5){
+                        controlListener.onMissionFileReceive(message.getMsg_type(),
+                                message.getFlightId(),
+                                message.getFlight_name(),
+                                splitUrl[0] +"://"+ splitUrl[1],
+                                splitUrl[2],
+                                splitUrl[3],
+                                splitUrl[4],
+                                message.getAccess_key(),
+                                message.getSecret_key(),
+                                message.getKmz_url());
                     }else{
                         Log.e(TAG, "minio媒体文件上传地址格式有误:"+message.getUpload_url());
                     }

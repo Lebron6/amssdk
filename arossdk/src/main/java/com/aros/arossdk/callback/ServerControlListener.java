@@ -7,7 +7,7 @@ public interface ServerControlListener {
     void onDockActionReceive(String status);
 
     void onMissionFileReceive(int type, String flightId, String flightName,
-                              String uploadUrl,String bucketName,String key,String sortiesId, String accessKey, String missionUrl);
+                              String uploadUrl,String bucketName,String objectKey,String sortiesId, String accessKey,String secretKey,String missionUrl);
 
     void onMissionPause(int type);
 

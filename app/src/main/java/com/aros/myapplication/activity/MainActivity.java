@@ -1,7 +1,11 @@
-package com.aros.myapplication;
+package com.aros.myapplication.activity;
 
+import android.Manifest;
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -9,18 +13,40 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
+import com.amazonaws.services.s3.model.ProgressEvent;
+import com.amazonaws.services.s3.model.ProgressListener;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.aros.arossdk.api.AMSSDKManager;
 import com.aros.arossdk.api.Config;
 import com.aros.arossdk.api.FlightState;
 import com.aros.arossdk.callback.MqttListener;
 import com.aros.arossdk.callback.ServerControlListener;
+import com.aros.myapplication.R;
+import com.aros.myapplication.util.SPUtil;
 
+import java.io.File;
 import java.util.List;
 
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.annotations.NonNull;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.ObservableEmitter;
+import io.reactivex.rxjava3.core.ObservableOnSubscribe;
+import io.reactivex.rxjava3.core.Observer;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import pub.devrel.easypermissions.EasyPermissions;
 
-public class MainActivity extends Activity implements EasyPermissions.PermissionCallbacks {
+public class MainActivity extends Activity  implements EasyPermissions.PermissionCallbacks{
 
     private String TAG=getClass().getSimpleName();
 
@@ -37,9 +63,15 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
     }
 
     EditText etAddr, etUserName, etPassword, etSn;
-    Button btnDockOpen, btnDockClose, btnDockIn, btnDockShut, btnPushFlightState,btnConnect;
+    Button btnDockOpen, btnDockClose, btnDockIn, btnDockShut, btnPushFlightState, btnConnect, btnUploadMediaFile;
 
     private void initView() {
+        String[] perms = {Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE};
+        if (EasyPermissions.hasPermissions(this, perms)) {
+        } else {
+            EasyPermissions.requestPermissions(this, "我们需要一些权限来完成操作。",
+                    123, perms);
+        }
         etAddr = findViewById(R.id.et_mqtt_server_uri);
         etUserName = findViewById(R.id.et_mqtt_username);
         etPassword = findViewById(R.id.et_mqtt_password);
@@ -48,6 +80,7 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
         btnDockClose = findViewById(R.id.btn_dock_close);
         btnDockIn = findViewById(R.id.btn_dock_in);
         btnDockShut = findViewById(R.id.btn_dock_shut);
+        btnUploadMediaFile = findViewById(R.id.btn_upload_media_file);
         btnPushFlightState = findViewById(R.id.btn_push_flight_state);
         btnConnect = findViewById(R.id.btn_connect);
         btnConnect.setOnClickListener(new View.OnClickListener() {
@@ -81,10 +114,18 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
                 AMSSDKManager.getInstance().sendDockShutDownCommand();
             }
         });
+        btnUploadMediaFile.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    minIOUpLoad(new File(getSDCardPath() + "/标定/IMG_20250114_145829.jpg"));
+                }
+            }
+        });
         btnPushFlightState.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                FlightState state=new FlightState();
+                FlightState state = new FlightState();
                 //返航点经纬度
                 state.setHomepointLat("xxx");
                 state.setHomepointLong("xxx");
@@ -179,35 +220,31 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
             }
 
             /**
-             *
-             * type表示
-             * missionFileUrl表示航线文件的Url，客户端需要下载航线文件，再上传到飞机执行任务
-             *
-             * @param type
-             * @param flightId
-             * @param flightName
-             * @param missionFileUrl
-             */
-            /**
              * 接收服务器下发的航线任务
-             * @param type 消息类型
-             * @param flightId 放在定频消息里推送
+             *
+             * @param type       消息类型
+             * @param flightId   放在定频消息里推送
              * @param flightName 放在定频消息里推送
-             * @param uploadUrl minio媒体文件上传地址
+             * @param uploadUrl  minio媒体文件上传地址
              * @param bucketName minio桶名
-             * @param key minio key(路径)
-             * @param sortiesId minio sortiesId
-             * @param accessKey minio Access_key
-             * @param missionUrl 航线文件下载url
+             * @param objectKey  minio key(路径)
+             * @param sortiesId  架次名（也是路径）
+             * @param accessKey  minio账号
+             * @param secretKey  minio密码
+             * @param missionUrl
              */
             @Override
             public void onMissionFileReceive(int type, String flightId, String flightName,
-                                             String uploadUrl, String bucketName, String key,
-                                             String sortiesId,String accessKey, String missionUrl) {
+                                             String uploadUrl, String bucketName, String objectKey,
+                                             String sortiesId, String accessKey, String secretKey, String missionUrl) {
+                Log.e(TAG,"收到航线命令:"+type+"  "+flightId+"  "+flightName+"  "+
+                        uploadUrl+"  "+bucketName+"  "+objectKey+"  "+sortiesId+"  "+accessKey+"  "+secretKey+"  "+missionUrl);
                 //航线执行成功调用
 //                AMSSDKManager.getInstance().response2Server(type);
                 //航线执行失败调用
 //                AMSSDKManager.getInstance().responseErrorMsg2Server(type, "执行失败原因");
+                //可以将关于MinIO相关的参数用SP保存，上传媒体文件时取用
+                SPUtil.getInstance().setMinIOConfig(uploadUrl, accessKey, secretKey, bucketName, objectKey, sortiesId);
             }
 
             /**
@@ -305,19 +342,18 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
             }
 
 
-
         });
         AMSSDKManager.getInstance().setMqttListener(new MqttListener() {
             @Override
             public void onConnectSuccess() {
-                Log.e(TAG,"connect success");
-                Toast.makeText(MainActivity.this,"mqtt connect success",Toast.LENGTH_SHORT).show();
+                Log.e(TAG, "connect success");
+                Toast.makeText(MainActivity.this, "mqtt connect success",Toast.LENGTH_SHORT).show();
             }
 
             @Override
             public void onConnectonFailure(String s) {
                 Log.e(TAG,"connect fail:"+s);
-                Toast.makeText(MainActivity.this,"connect fail",Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this,"connect fail："+s,Toast.LENGTH_SHORT).show();
 
             }
 
@@ -330,24 +366,139 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
     }
 
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        // Forward results to EasyPermissions
-        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
+    private AmazonS3 s3 = new AmazonS3Client(new AWSCredentials() {
+        @Override
+        public String getAWSAccessKeyId() {
+            return SPUtil.getInstance().getAccessKey(); // minio的账号
+        }
+
+        @Override
+        public String getAWSSecretKey() {
+            return SPUtil.getInstance().getSecretKey(); // minio的密码
+        }
+    }, Region.getRegion(Regions.US_EAST_1),//AWS客户端默认区域
+            new ClientConfiguration());
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    public void minIOUpLoad(File file) {
+        Observable.create(new ObservableOnSubscribe<String>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<String> emitter) throws Exception {
+
+                        s3.setEndpoint(SPUtil.getInstance().getUploadUrl());
+                        boolean bucketExists = s3.doesBucketExist(SPUtil.getInstance().getBucketName());
+                        if (!bucketExists) {
+                            s3.createBucket(SPUtil.getInstance().getBucketName());
+                        }
+
+                        // 上传文件到网关MINIO存储服务
+                        s3.putObject(
+                                new PutObjectRequest(
+                                        SPUtil.getInstance().getBucketName(),
+                                        "/" + SPUtil.getInstance().getObjectKey() + "/" +
+                                                SPUtil.getInstance().getSortiesId() + "/" + file.getName(),
+                                        file
+                                )
+                        );
+                        //这个上传进度监听似乎没什么用，还是个过期方法，你们可以放开试试看
+//                        s3.putObject(
+//                                new PutObjectRequest(
+//                                        SPUtil.getInstance().getBucketName(),
+//                                        "/" + SPUtil.getInstance().getObjectKey() + "/" +
+//                                                SPUtil.getInstance().getSortiesId() + "/" + file.getName(),
+//                                        file
+//                                ).withProgressListener(new ProgressListener() {
+//                                    @Override
+//                                    public void progressChanged(ProgressEvent progressEvent) {
+//                                        switch (progressEvent.getEventCode()) {
+//                                            case ProgressEvent.PREPARING_EVENT_CODE:
+//                                                Log.e(TAG, "Preparing to upload file " );
+//                                                break;
+//                                            case ProgressEvent.STARTED_EVENT_CODE:
+//                                                long bytesTransferred = progressEvent.getBytesTransferred();
+//                                                int percentage = (int) ((bytesTransferred * 100) / file.length());
+//                                                Log.e(TAG, "Upload started for file "  +
+//                                                        percentage + "% (" + bytesTransferred + " out of " + file.length() + " bytes)");
+//                                                break;
+//                                            case ProgressEvent.COMPLETED_EVENT_CODE:
+//                                                Log.e(TAG, "Upload completed for file " );
+//                                                break;
+//                                            case ProgressEvent.FAILED_EVENT_CODE:
+//                                                Log.e(TAG, "Upload failed for file " );
+//                                                break;
+//                                            case ProgressEvent.RESET_EVENT_CODE:
+//                                                Log.e(TAG, "Upload reset for file " );
+//                                                break;
+//                                        }
+//                                    }
+//                                })
+//                        );
+
+                        // 获取文件上传后访问地址url
+                        GeneratePresignedUrlRequest urlRequest = new GeneratePresignedUrlRequest(
+                                SPUtil.getInstance().getBucketName(),
+                                "/" + SPUtil.getInstance().getObjectKey() + "/" + file.getName()
+                        );
+                        String url = s3.generatePresignedUrl(urlRequest).toString();
+
+                        // 文件上传后访问地址
+                        emitter.onNext(url);
+                        emitter.onComplete();
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Observer<String>() {
+                    @Override
+                    public void onSubscribe(@NonNull Disposable d) {
+
+                    }
+
+                    @Override
+                    public void onNext(@NonNull String url) {
+                        Log.e(TAG,"上传地址："+url);
+
+                    }
+
+                    @Override
+                    public void onError(@NonNull Throwable e) {
+                        //这处理上传失败的逻辑
+Log.e(TAG,"上传失败:"+e.getMessage());
+                    }
+
+                    @Override
+                    public void onComplete() {
+//上传完成
+                        Log.e(TAG,"上传完成");
+
+                    }
+                });
+    }
+
+    private String getSDCardPath(){
+        if (checkSDCard()) {
+            return Environment.getExternalStorageDirectory()
+                    .getPath();
+        } else {
+            return Environment.getExternalStorageDirectory()
+                    .getParentFile().getPath();
+        }
+    }
+
+
+    private boolean checkSDCard() {
+        return TextUtils.equals(Environment.MEDIA_MOUNTED, Environment.getExternalStorageState());
+    }
+
+
+    @Override
+    public void onPermissionsGranted(int requestCode, @androidx.annotation.NonNull List<String> perms) {
+
     }
 
     @Override
-    public void onPermissionsGranted(int requestCode, List<String> list) {
-        // Some permissions have been granted
-        // ...
-    }
-
-    @Override
-    public void onPermissionsDenied(int requestCode, List<String> list) {
-        // Some permissions have been denied
-        // ...
+    public void onPermissionsDenied(int requestCode, @androidx.annotation.NonNull List<String> perms) {
 
     }
 }
