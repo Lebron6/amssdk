@@ -64,6 +64,9 @@ public class AMSSDKManager {
 
     }
 
+String testMissionJson="{\"secret_key\":\"admin123\",\"kmz_url\":\"http://223.108.157.174:9000/kmz/aaa/test.kmz\",\"access_key\":\"admin\",\n" +
+        "                       \"flight_name\":\"1\",\"msg_type\":60003,\"upload_url\":\"http://223.108.157.174:9000/kmz/1581F6GKB244L00402TE/1953\",\n" +
+        "                       \"task_id\":\"1953\",\"rtmp_push_url\":\"test\",\"isGuidingFlight\":0}";
     public void connect() {
         if (mMqttClient != null && mMqttClient.isConnected()) {
             Log.e(TAG, "mqtt 已连接");
@@ -77,7 +80,22 @@ public class AMSSDKManager {
             throw new RuntimeException(e);
         }
         mMqttClient.setCallback(mqttCallback); //设置监听订阅消息的回调
-
+//        Message message=new Gson().fromJson(testMissionJson,Message.class);
+//        String[] splitUrl = message.getUpload_url().split("://|/");
+//        if (splitUrl.length>=5){
+//            controlListener.onMissionFileReceive(message.getMsg_type(),
+//                    message.getFlightId(),
+//                    message.getFlight_name(),
+//                    splitUrl[0] +"://"+ splitUrl[1],
+//                    splitUrl[2],
+//                    splitUrl[3],
+//                    splitUrl[4],
+//                    message.getAccess_key(),
+//                    message.getSecret_key(),
+//                    message.getKmz_url());
+//        }else{
+//            Log.e(TAG, "minio媒体文件上传地址格式有误:"+message.getUpload_url());
+//        }
     }
 
     public void reConnect() {
@@ -137,12 +155,15 @@ public class AMSSDKManager {
                     break;
                 //航线文件下发
                 case 60003:
-                    if (!TextUtils.isEmpty(message.getUpload_url())){
+                    if (TextUtils.isEmpty(message.getUpload_url())){
                         Log.e(TAG, "minio媒体文件上传地址为空");
                         return;
                     }
+
+
+
                     String[] splitUrl = message.getUpload_url().split("://|/");
-                    if (splitUrl.length>=5){
+                    if (!(splitUrl.length<5)){
                         controlListener.onMissionFileReceive(message.getMsg_type(),
                                 message.getFlightId(),
                                 message.getFlight_name(),
@@ -152,7 +173,7 @@ public class AMSSDKManager {
                                 splitUrl[4],
                                 message.getAccess_key(),
                                 message.getSecret_key(),
-                                message.getKmz_url());
+                                 message.getKmz_url());
                     }else{
                         Log.e(TAG, "minio媒体文件上传地址格式有误:"+message.getUpload_url());
                     }
